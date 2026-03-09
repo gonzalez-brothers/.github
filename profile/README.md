@@ -4,27 +4,38 @@ B2B specialty coffee platform — connecting roasters with single-origin lots fr
 
 ## System Architecture
 
-```
-                            gonzalezbrothers.coffee
-                                     |
-                    +----------------+----------------+
-                    |                                 |
-         api.gonzalezbrothers.coffee      cdn.gonzalezbrothers.coffee
-                    |                                 |
-              ALB (HTTPS)                      CloudFront + S3
-                    |                          (product images)
-            +-------+-------+
-            |               |
-      B2B.Account      Cognito (2 pools)
-      (ECS Fargate)    B2B + Backoffice
-            |               |
-     +------+------+        +----------+
-     |      |      |        |          |
-  DynamoDB  S3   SNS    B2B.Lambdas  B2B.Emails
-                  |     (triggers)   (templates)
-                  +--------+---------+
-                           |
-                       Resend API
+```mermaid
+graph TD
+    Internet((Internet)) --> DNS[Route53<br/>gonzalezbrothers.coffee]
+
+    DNS --> ALB[ALB<br/>api.gonzalezbrothers.coffee]
+    DNS --> CF[CloudFront<br/>cdn.gonzalezbrothers.coffee]
+
+    ALB --> ECS["<b>B2B.Account</b><br/>ECS Fargate<br/><i>Rust · Axum</i>"]
+    CF --> S3[(S3<br/>Product Images)]
+
+    ECS --> DDB[(DynamoDB<br/>Single-Table)]
+    ECS --> S3
+    ECS --> SNS[SNS Topic<br/>Email Requests]
+    ECS --> CogB2B[Cognito<br/>B2B Pool]
+    ECS --> CogBO[Cognito<br/>Backoffice Pool]
+
+    CogB2B --> EmailSender["<b>B2B.Lambdas</b><br/>Custom Email Sender<br/><i>Rust · Lambda</i>"]
+    CogBO --> PreSignUp["<b>B2B.Lambdas</b><br/>Pre-SignUp<br/><i>Rust · Lambda</i>"]
+    EmailSender --> KMS[KMS<br/>Code Decryption]
+    EmailSender --> Resend[Resend API]
+
+    SNS --> Emails["<b>B2B.Emails</b><br/>Template Renderer<br/><i>Rust · Lambda</i>"]
+    Emails --> Resend
+
+    GHA[GitHub Actions] --> OIDC["<b>OIDC.Main</b><br/>IAM Roles<br/><i>CDK</i>"]
+    OIDC --> AWS[AWS Account]
+
+    style ECS fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#1b5e20
+    style EmailSender fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1
+    style PreSignUp fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#0d47a1
+    style Emails fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#bf360c
+    style OIDC fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px,color:#4a148c
 ```
 
 ## Repositories
